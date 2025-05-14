@@ -1,14 +1,21 @@
 package org.mason.bupt_note.controller;
 
 import jakarta.annotation.Resource;
+import jakarta.persistence.EntityManagerFactory;
 import org.mason.bupt_note.entity.User;
 import org.mason.bupt_note.repository.UserRepository;
+import org.mason.bupt_note.service.AuthService;
 import org.mason.bupt_note.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -20,24 +27,71 @@ public class AuthController {
     @Resource
     private UserRepository userRepository;
 
+    @Resource
+    private AuthService authService;
+
+    private final StringRedisTemplate redisTemplate;
+
+    public AuthController(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> requestBody) {
-        String studentId = requestBody.get("studentId");
-        String password = requestBody.get("password");
-        // 查找用户
-        User user = userRepository.findByStudentId(studentId);
-        if (user == null) {
-            return ResponseEntity.status(401).body("用户不存在");
+        String authProvider = requestBody.get("authProvider");
+
+        if ("PASSWORD".equalsIgnoreCase(authProvider)) {
+            String studentId = requestBody.get("studentId");
+            String password = requestBody.get("password");
+            // 处理密码登录
+            User user = userRepository.findByStudentId(studentId);
+            if (user == null) {
+                return ResponseEntity.status(401).body("用户不存在");
+            }
+
+            BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+            if (!passwordEncoder.matches(password, user.getPassword())) {
+                return ResponseEntity.status(401).body("学号或密码错误");
+            }
+            authService.getUserByUserId(user.getUserId().toString());
+            // 生成 JWT Token 并返回
+            String token = JwtUtil.generateToken(user.getUserId().toString());
+            return ResponseEntity.ok(token);
+        } else if ("GITHUB".equalsIgnoreCase(authProvider)) {
+            // 处理 GitHub OAuth2 登录
+            System.out.println("GitHub OAuth2 登录");
+            // 假设你已经集成了 OAuth2 的认证，这里我们使用 OAuth2 获取 GitHub 用户信息
+            try {
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                if (authentication instanceof OAuth2AuthenticationToken) {
+                    OAuth2AuthenticationToken oauth2Token = (OAuth2AuthenticationToken) authentication;
+                    OAuth2User oauth2User = oauth2Token.getPrincipal();
+                    String githubUsername = (String) oauth2User.getAttributes().get("login");
+
+                    // 处理 GitHub 用户信息
+                    User user = userRepository.findByGithubUsername(githubUsername);
+                    if (user == null) {
+                        user = new User();
+                        user.setGithubUsername(githubUsername);
+                        user.setRole(User.Role.USER);
+                        user.setCreatedAt(LocalDateTime.now());
+                        user.setUpdatedAt(LocalDateTime.now());
+                        userRepository.save(user);
+                    }
+                    authService.getUserByUserId(user.getUserId().toString());
+                    String token = JwtUtil.generateToken(user.getUserId().toString());
+                    return ResponseEntity.ok(token);
+                } else {
+                    return ResponseEntity.status(401).body("用户未完成 OAuth2 登录");
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                return ResponseEntity.status(500).body("OAuth2 认证异常: " + e.getMessage());
+            }
+        } else {
+            return ResponseEntity.status(400).body("不支持的认证方式");
         }
-        // 使用 BCryptPasswordEncoder 来验证用户输入的密码
-        BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-        // 使用 matches 方法来验证输入的密码是否与存储的加密密码匹配
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            return ResponseEntity.status(401).body("学号或密码错误");
-        }
-        // 如果密码正确，生成 JWT Token 并返回
-        String token = JwtUtil.generateToken(studentId);
-        return ResponseEntity.ok(token);
     }
 
 
@@ -67,4 +121,14 @@ public class AuthController {
         userRepository.save(newUser);
         return ResponseEntity.ok("注册成功");
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
+        String userId = JwtUtil.validateToken(token);
+        // 删除 Redis 中的缓存（如用户登录态、验证码等）
+        redisTemplate.delete("loggedInUsers::" + userId);
+
+        return ResponseEntity.ok("登出成功");
+    }
+
 }

@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 //Entity注解表示这是一个实体类
@@ -12,7 +14,27 @@ import java.time.LocalDateTime;
 @Setter
 @Getter
 @Table(name = "users")
-public class User {
+public class User implements Serializable {
+    //将对象转换为字节流，Java的内置机制会处理序列化和反序列化的具体细节
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    public String toString() {
+        return "User{" +
+                "userId=" + userId +
+                ", role=" + role +
+                ", studentId='" + studentId + '\'' +
+                ", name='" + name + '\'' +
+                ", password='" + password + '\'' +
+                ", avatarUrl='" + avatarUrl + '\'' +
+                ", backgroundImageUrl='" + backgroundImageUrl + '\'' +
+                ", authProvider=" + authProvider +
+                ", githubId='" + githubId + '\'' +
+                ", githubUsername='" + githubUsername + '\'' +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                '}';
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,9 +64,6 @@ public class User {
     @Column(nullable = false)
     private AuthProvider authProvider;
 
-    @Column(length = 255)
-    private String authProviderId;
-
     // GitHub 相关字段
     @Column(length = 255)
     private String githubId;
@@ -57,38 +76,6 @@ public class User {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
-
-
-//    public String getPassword() {
-//        return password;
-//    }
-//    public void setPassword(String password) {
-//        this.password = password;
-//    }
-//
-//    public void setStudentId(String studentId) {
-//        this.studentId = studentId;
-//    }
-//
-//    public void setAuthProvider(String authProvider) {
-//        this.authProvider = AuthProvider.valueOf(authProvider);
-//    }
-//
-//    public void setRole(String user) {
-//        this.role = Role.valueOf(user);
-//    }
-//
-//    public void setCreatedAt(LocalDateTime now) {
-//        this.createdAt = now;
-//    }
-//
-//    public void setUpdatedAt(LocalDateTime now) {
-//        this.updatedAt = now;
-//    }
-//
-//    public void setName(String name) {
-//        this.name = name;
-//    }
 
     public enum AuthProvider {
         PASSWORD, GITHUB

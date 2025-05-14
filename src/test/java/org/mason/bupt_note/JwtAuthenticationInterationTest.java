@@ -31,8 +31,8 @@ class JwtAuthenticationIntegrationTest {
     @Test
     void testLoginAndAccessProtectedEndpoint() throws Exception {
         // 模拟登录，生成 JWT
-        String studentId = "testStudent";
-        String token = JwtUtil.generateToken(studentId);
+        String userID = "1";
+        String token = JwtUtil.generateToken(userID);
 
         // 使用生成的 JWT 访问受保护的端点
         mockMvc.perform(get("/api/protected-endpoint")
