@@ -40,9 +40,13 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> requestBody) {
         String authProvider = requestBody.get("authProvider");
-
+        String studentId = requestBody.get("studentId");
+        String cachedToken = redisTemplate.opsForValue().get("loggedInUsers::" + studentId);
+        //前端应该要跳转到登录成功的页面
+        if (cachedToken != null) {
+            return ResponseEntity.ok(cachedToken); // 返回已登录用户的 Token
+        }
         if ("PASSWORD".equalsIgnoreCase(authProvider)) {
-            String studentId = requestBody.get("studentId");
             String password = requestBody.get("password");
             // 处理密码登录
             User user = userRepository.findByStudentId(studentId);
